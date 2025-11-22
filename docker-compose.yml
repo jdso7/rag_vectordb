@@ -1,0 +1,77 @@
+services:
+  # Chroma Vector Database
+  chroma:
+    image: chromadb/chroma:latest
+    platform: linux/amd64
+    container_name: chroma-db
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma-data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+    networks:
+      - rag-network
+
+  # Embedding Service (sentence-transformers)
+  embedding-service:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.2
+    platform: linux/amd64
+    container_name: embedding-service
+    ports:
+      - "8001:80"
+    environment:
+      - MODEL_ID=sentence-transformers/all-MiniLM-L6-v2
+    command: --model-id sentence-transformers/all-MiniLM-L6-v2 --port 80
+    networks:
+      - rag-network
+
+  # NestJS Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nestjs-backend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - CHROMA_URL=http://chroma:8000
+      - EMBEDDING_SERVICE_URL=http://embedding-service:80
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - OLLAMA_URL=http://host.docker.internal:11434
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    depends_on:
+      - chroma
+      - embedding-service
+    networks:
+      - rag-network
+    command: npm run start:dev
+
+  # Angular Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: angular-frontend
+    ports:
+      - "4200:4200"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    networks:
+      - rag-network
+    command: npm start
+
+volumes:
+  chroma-data:
+
+networks:
+  rag-network:
+    driver: bridge
