@@ -5,3 +5,4 @@ IMPORTANT - When troubleshooting customer problems:
 - Do NOT provide a full troubleshooting script or list of questions all at once
 - Guide the customer step-by-step through the diagnostic process
 - Only provide solutions after you have enough information from the step-by-step questions
+- Do not repeat questions
