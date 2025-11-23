@@ -1,25 +1,25 @@
-import { Component } from '@angular/core';
+import { Component, Output, EventEmitter, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService, RagResponse } from '../../services/api.service';
 
 interface ChatMessage {
-   type: 'user' | 'assistant';
-   content: string;
-   sources?: Array<{
-      id: string;
-      content: string;
-      title?: string;
-      distance: number;
-   }>;
-   tokensUsed?: number;
+  type: 'user' | 'assistant';
+  content: string;
+  sources?: Array<{
+    id: string;
+    content: string;
+    title?: string;
+    distance: number;
+  }>;
+  tokensUsed?: number;
 }
 
 @Component({
-   selector: 'app-rag-chat',
-   standalone: true,
-   imports: [CommonModule, FormsModule],
-   template: `
+  selector: 'app-rag-chat',
+  standalone: true,
+  imports: [CommonModule, FormsModule],
+  template: `
     <div class="card">
       <h2>💬 RAG Chat</h2>
       <p class="subtitle">Ask questions about your documents using AI</p>
@@ -33,6 +33,9 @@ interface ChatMessage {
           <input type="radio" name="provider" value="llama" [(ngModel)]="selectedProvider" />
           <span class="provider-label">🦙 Llama (Local)</span>
         </label>
+        <button (click)="toggleContextHistory()" class="context-btn" title="View context history">
+          📋 Context ({{ llmHistory.length }})
+        </button>
         <button *ngIf="messages.length > 0" (click)="clearChat()" class="clear-btn" title="Clear conversation">
           🗑️ Clear Chat
         </button>
@@ -52,10 +55,9 @@ interface ChatMessage {
               <div *ngIf="msg.sources && msg.sources.length > 0" class="sources">
                 <div class="sources-header">📎 Sources:</div>
                 <div *ngFor="let source of msg.sources" class="source-item">
-                  <div class="source-title">{{ source.title || 'Untitled' }}</div>
-                  <div class="source-content">{{ truncate(source.content, 100) }}</div>
-                  <div class="source-meta">
-                    Distance: {{ source.distance.toFixed(4) }}
+                  <div class="source-header">
+                    <span class="source-title">{{ source.title || 'Untitled' }}</span>
+                    <span class="source-distance">{{ source.distance.toFixed(4) }}</span>
                   </div>
                 </div>
               </div>
@@ -98,7 +100,7 @@ interface ChatMessage {
       </div>
     </div>
   `,
-   styles: [`
+  styles: [`
     h2 {
       margin-bottom: 5px;
       color: #333;
@@ -150,6 +152,22 @@ interface ChatMessage {
     .provider-label {
       font-size: 14px;
       font-weight: 500;
+    }
+
+    .context-btn {
+      padding: 8px 16px;
+      background: #17a2b8;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background 0.2s;
+      margin-left: auto;
+    }
+
+    .context-btn:hover {
+      background: #138496;
     }
 
     .chat-container {
@@ -238,9 +256,27 @@ interface ChatMessage {
       background: rgba(255, 255, 255, 0.2);
     }
 
+    .source-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+
     .source-title {
       font-weight: 600;
-      margin-bottom: 5px;
+      flex: 1;
+    }
+
+    .source-distance {
+      font-size: 11px;
+      color: #999;
+      font-family: monospace;
+      white-space: nowrap;
+    }
+
+    .message.user .source-distance {
+      color: rgba(255, 255, 255, 0.7);
     }
 
     .source-content {
@@ -325,74 +361,119 @@ interface ChatMessage {
     }
   `]
 })
-export class RagChatComponent {
-   messages: ChatMessage[] = [];
-   userQuestion = '';
-   selectedProvider = 'openai';
-   isQuerying = false;
-   errorMessage = '';
+export class RagChatComponent implements AfterViewChecked {
+  @Output() historyChange = new EventEmitter<Array<{ role: 'user' | 'assistant'; content: string }>>();
+  @Output() toggleHistory = new EventEmitter<void>();
+  @ViewChild('messagesContainer') private messagesContainer!: ElementRef;
 
-   constructor(private apiService: ApiService) { }
+  messages: ChatMessage[] = [];
+  llmHistory: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+  userQuestion = '';
+  selectedProvider = 'openai';
+  isQuerying = false;
+  errorMessage = '';
+  private shouldScrollToBottom = false;
 
-   sendQuery() {
-      if (!this.userQuestion.trim() || this.isQuerying) {
-         return;
+  constructor(private apiService: ApiService) { }
+
+  ngAfterViewChecked() {
+    if (this.shouldScrollToBottom) {
+      this.scrollToBottom();
+      this.shouldScrollToBottom = false;
+    }
+  }
+
+  private scrollToBottom(): void {
+    try {
+      if (this.messagesContainer) {
+        this.messagesContainer.nativeElement.scrollTop = this.messagesContainer.nativeElement.scrollHeight;
       }
+    } catch (err) {
+      console.error('Scroll error:', err);
+    }
+  }
 
-      const question = this.userQuestion.trim();
-      this.userQuestion = '';
+  toggleContextHistory() {
+    this.toggleHistory.emit();
+  } sendQuery() {
+    if (!this.userQuestion.trim() || this.isQuerying) {
+      return;
+    }
+
+    const question = this.userQuestion.trim();
+    this.userQuestion = '';
+    this.errorMessage = '';
+    this.isQuerying = true;
+
+    // Add user message
+    this.messages.push({
+      type: 'user',
+      content: question
+    });
+    this.shouldScrollToBottom = true;
+
+    // Build conversation history (last 5 exchanges = 10 messages, excluding current question)
+    // Get all messages except the one we just added
+    const previousMessages = this.messages.slice(0, -1);
+    // Take the last 10 messages (5 user + 5 assistant)
+    const history = previousMessages.slice(-10).map(msg => ({
+      role: msg.type === 'user' ? 'user' as const : 'assistant' as const,
+      content: msg.content
+    }));
+
+    // Update the LLM history display with what's being sent
+    this.llmHistory = history;
+    this.historyChange.emit(this.llmHistory);
+
+    this.apiService.queryRag(question, 3, this.selectedProvider, history).subscribe({
+      next: (response) => {
+        // Add assistant response
+        this.messages.push({
+          type: 'assistant',
+          content: response.answer,
+          sources: response.sources,
+          tokensUsed: response.tokensUsed
+        });
+        this.isQuerying = false;
+        this.shouldScrollToBottom = true;
+        this.shouldScrollToBottom = true;
+
+        // Update LLM history to include the latest exchange
+        const allMessages = this.messages.slice(0);
+        this.llmHistory = allMessages.slice(-10).map(msg => ({
+          role: msg.type === 'user' ? 'user' as const : 'assistant' as const,
+          content: msg.content
+        }));
+        this.historyChange.emit(this.llmHistory);
+      },
+      error: (error) => {
+        this.errorMessage = error.message || 'Failed to get response';
+        console.error('RAG query error:', error);
+        this.isQuerying = false;
+      }
+    });
+  }
+
+  onEnter(event: KeyboardEvent) {
+    if (!event.shiftKey) {
+      event.preventDefault();
+      this.sendQuery();
+    }
+  }
+
+  clearChat() {
+    if (confirm('Clear conversation history?')) {
+      this.messages = [];
+      this.llmHistory = [];
       this.errorMessage = '';
-      this.isQuerying = true;
+      this.historyChange.emit(this.llmHistory);
+    }
+  }
 
-      // Add user message
-      this.messages.push({
-         type: 'user',
-         content: question
-      });
-
-      // Build conversation history (last 5 messages, excluding current question)
-      const history = this.messages.slice(-6, -1).map(msg => ({
-         role: msg.type === 'user' ? 'user' as const : 'assistant' as const,
-         content: msg.content
-      }));
-
-      this.apiService.queryRag(question, 3, this.selectedProvider, history).subscribe({
-         next: (response) => {
-            // Add assistant response
-            this.messages.push({
-               type: 'assistant',
-               content: response.answer,
-               sources: response.sources,
-               tokensUsed: response.tokensUsed
-            });
-            this.isQuerying = false;
-         },
-         error: (error) => {
-            this.errorMessage = error.message || 'Failed to get response';
-            console.error('RAG query error:', error);
-            this.isQuerying = false;
-         }
-      });
-   }
-
-   onEnter(event: KeyboardEvent) {
-      if (!event.shiftKey) {
-         event.preventDefault();
-         this.sendQuery();
-      }
-   }
-
-   clearChat() {
-      if (confirm('Clear conversation history?')) {
-         this.messages = [];
-         this.errorMessage = '';
-      }
-   }
-
-   truncate(text: string, maxLength: number): string {
-      if (text.length <= maxLength) {
-         return text;
-      }
-      return text.substring(0, maxLength) + '...';
-   }
+  truncate(text: string, maxLength: number): string {
+    if (text.length <= maxLength) {
+      return text;
+    }
+    return text.substring(0, maxLength) + '...';
+  }
 }

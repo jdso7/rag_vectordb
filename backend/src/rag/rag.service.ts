@@ -91,7 +91,8 @@ export class RagService {
             // Query Ollama (Llama) - optimized for speed with conversation history
             let conversationContext = '';
             if (conversationHistory.length > 0) {
-               conversationContext = conversationHistory.slice(-5).map(msg =>
+               // Take last 10 messages (5 exchanges) for context
+               conversationContext = conversationHistory.slice(-10).map(msg =>
                   `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`
                ).join('\n\n') + '\n\n';
             }
@@ -114,7 +115,7 @@ export class RagService {
             // Query OpenAI (ChatGPT) with conversation history
             const messages: any[] = [
                { role: 'system', content: systemPrompt },
-               ...conversationHistory.slice(-5), // Last 5 messages for context
+               ...conversationHistory.slice(-10), // Last 10 messages (5 exchanges) for context
                { role: 'user', content: userPrompt },
             ];
 
