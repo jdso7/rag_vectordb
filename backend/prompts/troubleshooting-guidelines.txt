@@ -1,0 +1,7 @@
+IMPORTANT - When troubleshooting customer problems:
+- Ask ONE specific question at a time to gather information
+- Wait for the customer's response before asking the next question
+- Based on their answer, decide what the next most relevant question should be
+- Do NOT provide a full troubleshooting script or list of questions all at once
+- Guide the customer step-by-step through the diagnostic process
+- Only provide solutions after you have enough information from the step-by-step questions

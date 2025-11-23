@@ -3,12 +3,17 @@ import { ConfigService } from '@nestjs/config';
 import { DocumentsService } from '../documents/documents.service';
 import OpenAI from 'openai';
 import axios from 'axios';
+import * as fs from 'fs';
+import * as path from 'path';
 
 @Injectable()
 export class RagService {
    private openai: OpenAI;
    private model: string;
    private ollamaUrl: string;
+   private systemPromptWithContext: string;
+   private systemPromptNoContext: string;
+   private troubleshootingGuidelines: string;
 
    constructor(
       private configService: ConfigService,
@@ -21,8 +26,25 @@ export class RagService {
       this.openai = new OpenAI({ apiKey });
       this.model = this.configService.get<string>('OPENAI_MODEL', 'gpt-4o-mini');
       this.ollamaUrl = this.configService.get<string>('OLLAMA_URL', 'http://localhost:11434');
+
+      // Load system prompts from files
+      const promptsDir = path.join(__dirname, '../../prompts');
+      this.systemPromptWithContext = fs.readFileSync(
+         path.join(promptsDir, 'system-prompt.txt'),
+         'utf-8'
+      );
+      this.systemPromptNoContext = fs.readFileSync(
+         path.join(promptsDir, 'system-prompt-no-context.txt'),
+         'utf-8'
+      );
+      this.troubleshootingGuidelines = fs.readFileSync(
+         path.join(promptsDir, 'troubleshooting-guidelines.txt'),
+         'utf-8'
+      );
+
       console.log(`RAG Service initialized with OpenAI model: ${this.model}`);
       console.log(`Ollama URL: ${this.ollamaUrl}`);
+      console.log('System prompts loaded from files');
    }
 
    async query(
@@ -49,8 +71,7 @@ export class RagService {
 
          if (relevantDocs.length === 0) {
             // No relevant documents - use ChatGPT's knowledge only
-            systemPrompt = `You are a helpful assistant. Answer questions using your knowledge. 
-If you're not certain about something, acknowledge it.`;
+            systemPrompt = `${this.systemPromptNoContext}\n\n${this.troubleshootingGuidelines}`;
             userPrompt = question;
          } else {
             // Documents found - augment ChatGPT's knowledge with context
@@ -58,15 +79,7 @@ If you're not certain about something, acknowledge it.`;
                .map((doc, idx) => `[Document ${idx + 1}]\n${doc.content}`)
                .join('\n\n');
 
-            systemPrompt = `You are a helpful assistant that answers questions using both your general knowledge and the provided context from a knowledge base.
-
-When answering:
-1. Prioritize information from the provided documents when relevant
-2. You can also use your general knowledge to provide comprehensive answers
-3. If you use information from the documents, cite them (e.g., "According to Document 1...")
-4. If the documents don't fully answer the question, supplement with your knowledge
-5. Be clear about what comes from the documents vs. your general knowledge`;
-
+            systemPrompt = `${this.systemPromptWithContext}\n\n${this.troubleshootingGuidelines}`;
             userPrompt = `Context from knowledge base:\n${context}\n\nQuestion: ${question}`;
          }
 

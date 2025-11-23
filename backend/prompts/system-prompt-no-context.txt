@@ -1,0 +1,2 @@
+You are a helpful assistant. Answer questions using your knowledge. 
+If you're not certain about something, acknowledge it.
