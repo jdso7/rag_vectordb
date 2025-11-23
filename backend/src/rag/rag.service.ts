@@ -76,11 +76,11 @@ export class RagService {
          } else {
             // Documents found - augment ChatGPT's knowledge with context
             const context = relevantDocs
-               .map((doc, idx) => `[Document ${idx + 1}]\n${doc.content}`)
+               .map((doc) => `[${doc.metadata?.title || 'Untitled Document'}]\n${doc.content}`)
                .join('\n\n');
 
             systemPrompt = `${this.systemPromptWithContext}\n\n${this.troubleshootingGuidelines}`;
-            userPrompt = `Context from knowledge base:\n${context}\n\nQuestion: ${question}`;
+            userPrompt = `Question: ${question}\n\nContext from knowledge base:\n${context}`;
          }
 
          // 4. Query LLM based on provider
@@ -142,6 +142,8 @@ export class RagService {
             })),
             tokensUsed,
             mode: relevantDocs.length > 0 ? 'rag' : 'general',
+            actualPrompt: userPrompt, // The actual prompt sent to LLM (with context if RAG mode)
+            systemPrompt: systemPrompt, // The system prompt used
          };
       } catch (error) {
          console.error('Error in RAG query:', error);

@@ -20,7 +20,12 @@ import { CommonModule } from '@angular/common';
             <span class="context-role">{{ msg.role === 'user' ? '👤 User' : '🤖 Assistant' }}</span>
             <span class="context-index">#{{ i + 1 }}</span>
           </div>
-          <div class="context-content-text">{{ truncate(msg.content, 200) }}</div>
+          <div *ngIf="msg.systemPrompt" class="system-prompt-section">
+            <div class="system-prompt-label">🛡️ System Prompt:</div>
+            <div class="system-prompt-text">{{ msg.systemPrompt }}</div>
+          </div>
+          <div *ngIf="msg.role === 'user' && msg.systemPrompt" class="prompt-divider"></div>
+          <div class="context-content-text">{{ msg.content }}</div>
         </div>
       </div>
     </div>
@@ -96,15 +101,37 @@ import { CommonModule } from '@angular/common';
       word-wrap: break-word;
       white-space: pre-wrap;
     }
+
+    .system-prompt-section {
+      margin-bottom: 12px;
+      padding: 10px;
+      background: #e3f2fd;
+      border-left: 3px solid #2196f3;
+      border-radius: 4px;
+    }
+
+    .system-prompt-label {
+      font-weight: 600;
+      font-size: 12px;
+      color: #1976d2;
+      margin-bottom: 6px;
+    }
+
+    .system-prompt-text {
+      font-size: 12px;
+      color: #555;
+      line-height: 1.4;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .prompt-divider {
+      height: 1px;
+      background: #dee2e6;
+      margin: 12px 0;
+    }
   `]
 })
 export class ContextHistoryComponent {
-   @Input() llmHistory: Array<{ role: 'user' | 'assistant'; content: string }> = [];
-
-   truncate(text: string, maxLength: number): string {
-      if (text.length <= maxLength) {
-         return text;
-      }
-      return text.substring(0, maxLength) + '...';
-   }
+   @Input() llmHistory: Array<{ role: 'user' | 'assistant'; content: string; systemPrompt?: string }> = [];
 }

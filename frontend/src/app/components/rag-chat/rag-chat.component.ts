@@ -13,6 +13,8 @@ interface ChatMessage {
     distance: number;
   }>;
   tokensUsed?: number;
+  actualPrompt?: string;
+  systemPrompt?: string;
 }
 
 @Component({
@@ -362,12 +364,12 @@ interface ChatMessage {
   `]
 })
 export class RagChatComponent implements AfterViewChecked {
-  @Output() historyChange = new EventEmitter<Array<{ role: 'user' | 'assistant'; content: string }>>();
+  @Output() historyChange = new EventEmitter<Array<{ role: 'user' | 'assistant'; content: string; systemPrompt?: string }>>();
   @Output() toggleHistory = new EventEmitter<void>();
   @ViewChild('messagesContainer') private messagesContainer!: ElementRef;
 
   messages: ChatMessage[] = [];
-  llmHistory: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+  llmHistory: Array<{ role: 'user' | 'assistant'; content: string; systemPrompt?: string }> = [];
   userQuestion = '';
   selectedProvider = 'openai';
   isQuerying = false;
@@ -421,12 +423,23 @@ export class RagChatComponent implements AfterViewChecked {
       content: msg.content
     }));
 
-    // Update the LLM history display with what's being sent
-    this.llmHistory = history;
+    // Update the LLM history display - show just the history being sent (before augmentation)
+    this.llmHistory = history.map(msg => ({
+      role: msg.role,
+      content: msg.content
+    }));
     this.historyChange.emit(this.llmHistory);
 
     this.apiService.queryRag(question, 3, this.selectedProvider, history).subscribe({
       next: (response) => {
+        // Update the user message with the actual prompt that was sent
+        const lastUserMsgIndex = this.messages.length - 1;
+        this.messages[lastUserMsgIndex] = {
+          ...this.messages[lastUserMsgIndex],
+          actualPrompt: response.actualPrompt,
+          systemPrompt: response.systemPrompt
+        };
+
         // Add assistant response
         this.messages.push({
           type: 'assistant',
@@ -436,14 +449,23 @@ export class RagChatComponent implements AfterViewChecked {
         });
         this.isQuerying = false;
         this.shouldScrollToBottom = true;
-        this.shouldScrollToBottom = true;
 
-        // Update LLM history to include the latest exchange
+        // Update LLM history to include the latest exchange with actual prompts
         const allMessages = this.messages.slice(0);
-        this.llmHistory = allMessages.slice(-10).map(msg => ({
-          role: msg.type === 'user' ? 'user' as const : 'assistant' as const,
-          content: msg.content
-        }));
+        this.llmHistory = allMessages.slice(-10).map(msg => {
+          if (msg.type === 'user' && msg.systemPrompt && msg.actualPrompt) {
+            // For user messages, show system prompt + actual augmented prompt
+            return {
+              role: 'user' as const,
+              content: msg.actualPrompt,
+              systemPrompt: msg.systemPrompt
+            };
+          }
+          return {
+            role: msg.type === 'user' ? 'user' as const : 'assistant' as const,
+            content: msg.content
+          };
+        });
         this.historyChange.emit(this.llmHistory);
       },
       error: (error) => {

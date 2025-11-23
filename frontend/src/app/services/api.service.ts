@@ -26,6 +26,8 @@ export interface RagResponse {
       distance: number;
    }>;
    tokensUsed: number;
+   actualPrompt?: string;
+   systemPrompt?: string;
 }
 
 @Injectable({

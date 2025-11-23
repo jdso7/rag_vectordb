@@ -149,10 +149,10 @@ import { ContextHistoryComponent } from './components/context-history/context-hi
 })
 export class AppComponent {
   title = 'RAG Vector DB Lab';
-  currentHistory: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+  currentHistory: Array<{ role: 'user' | 'assistant'; content: string; systemPrompt?: string }> = [];
   showHistory = false;
 
-  onHistoryChange(history: Array<{ role: 'user' | 'assistant'; content: string }>) {
+  onHistoryChange(history: Array<{ role: 'user' | 'assistant'; content: string; systemPrompt?: string }>) {
     this.currentHistory = history;
   }
 }
