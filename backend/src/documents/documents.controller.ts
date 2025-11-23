@@ -2,6 +2,7 @@ import {
    Controller,
    Get,
    Post,
+   Put,
    Delete,
    Body,
    Param,
@@ -18,6 +19,11 @@ class AddDocumentDto {
 class SearchQueryDto {
    query: string;
    limit?: number;
+}
+
+class UpdateDocumentDto {
+   content?: string;
+   title?: string;
 }
 
 @ApiTags('documents')
@@ -57,6 +63,20 @@ export class DocumentsController {
       return await this.documentsService.searchDocuments(
          searchQuery.query,
          searchQuery.limit || 5,
+      );
+   }
+
+   @Put(':id')
+   @ApiOperation({ summary: 'Update a document by ID' })
+   @ApiResponse({ status: 200, description: 'Document updated successfully' })
+   async updateDocument(
+      @Param('id') id: string,
+      @Body() updateDocumentDto: UpdateDocumentDto,
+   ) {
+      return await this.documentsService.updateDocument(
+         id,
+         updateDocumentDto.content,
+         updateDocumentDto.title,
       );
    }
 

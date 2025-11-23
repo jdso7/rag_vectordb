@@ -44,6 +44,50 @@ export class DocumentsService {
       return await this.chromaService.deleteDocument(id);
    }
 
+   async updateDocument(
+      id: string,
+      content?: string,
+      title?: string,
+   ): Promise<Document> {
+      // Get existing document
+      const allDocs = await this.getAllDocuments();
+      const existingDoc = allDocs.find(doc => doc.id === id);
+
+      if (!existingDoc) {
+         throw new Error(`Document with id ${id} not found`);
+      }
+
+      // Use new values or keep existing ones
+      const updatedContent = content !== undefined ? content : existingDoc.content;
+      const updatedTitle = title !== undefined ? title : existingDoc.metadata?.title;
+
+      // Generate new embedding if content changed
+      const embedding = content !== undefined
+         ? await this.embeddingService.generateEmbedding(updatedContent)
+         : null;
+
+      const metadata = {
+         ...existingDoc.metadata,
+         title: updatedTitle,
+         updatedAt: new Date().toISOString(),
+      };
+
+      // Update in Chroma (delete and re-add with same ID)
+      await this.chromaService.deleteDocument(id);
+      await this.chromaService.addDocument(
+         id,
+         updatedContent,
+         embedding || await this.embeddingService.generateEmbedding(updatedContent),
+         metadata,
+      );
+
+      return {
+         id,
+         content: updatedContent,
+         metadata,
+      };
+   }
+
    async getAllDocuments(): Promise<Document[]> {
       const result = await this.chromaService.getAllDocuments();
 

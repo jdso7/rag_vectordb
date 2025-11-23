@@ -49,6 +49,10 @@ export class ApiService {
       return this.http.delete<{ success: boolean; id: string }>(`${this.apiUrl}/documents/${id}`);
    }
 
+   updateDocument(id: string, content?: string, title?: string): Observable<Document> {
+      return this.http.put<Document>(`${this.apiUrl}/documents/${id}`, { content, title });
+   }
+
    searchDocuments(query: string, limit: number = 5): Observable<SearchResult[]> {
       return this.http.post<SearchResult[]>(`${this.apiUrl}/documents/search`, { query, limit });
    }
